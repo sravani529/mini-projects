@@ -1,6 +1,5 @@
 import streamlit as st
 import folium
-from typing import Tuple
 from folium.plugins import HeatMap
 from streamlit_folium import st_folium
 import pandas as pd
@@ -13,271 +12,140 @@ import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from twilio.rest import Client
 import os
-import firebase_admin 
-from firebase_admin import credentials, messaging
 import json
 import base64
-import matplotlib.pyplot as plt
 from datetime import datetime
 import time
 import plotly.express as px
-# ----------- sms reply message function-----------
-def send_sms_notification(report):
-    load_dotenv(override=True)
 
-    # ✅ Validate credentials
-    sid = os.getenv("TWILIO_ACCOUNT_SID")
-    token = os.getenv("TWILIO_AUTH_TOKEN")
+import os
+from dotenv import load_dotenv
 
-    if not sid or not token:
-        raise Exception("Twilio credentials missing")
+load_dotenv(override=True)
+st.write("Twilio SID loaded:", bool(os.getenv("TWILIO_ACCOUNT_SID")))
+st.write("Twilio Token loaded:", bool(os.getenv("TWILIO_AUTH_TOKEN")))
+st.write("Messaging SID loaded:", bool(os.getenv("TWILIO_MESSAGING_SERVICE_SID")))
+sid = os.getenv("TWILIO_ACCOUNT_SID")
+token = os.getenv("TWILIO_AUTH_TOKEN")
+messaging_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
 
-    client = Client(sid, token)
+if not sid or not token or not messaging_sid:
+    raise Exception("Twilio credentials missing. Check your .env file.")
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 
-    # ✅ Fix phone format
-    phone = report['phone']
-    if not phone.startswith("+"):
-        phone = "+91" + phone
-
-    try:
-        # 📩 Admin message
-        admin_msg = client.messages.create(
-    body=(
-        "NEW HEALTH REPORT\n"
-        "----------------------\n"
-        f"Name: {report['name']}\n"
-        f"Age: {report['age']}\n"
-        f"Phone: {report['phone']}\n"
-        f"Industry: {report['industry']}\n"
-        f"Symptoms: {report['symptoms']}\n"
-        f"Address: {report['address']}\n"
-        f"Time: {report['time']}\n"
-        "----------------------"
-    ),
-    messaging_service_sid="MG4fea662af68407f0a138ac1ec40c27ed",
-    to="+919513838736"
+st.set_page_config(
+    page_title="Hazard & Health System",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
-        
-
-        # 📲 User message
-        client.messages.create(
-            body=f"Hello {report['name']}, your report received ✅",
-            messaging_service_sid="MG4fea662af68407f0a138ac1ec40c27ed",
-            to=phone
-        )
-
-        return admin_msg.sid
-
-    except Exception as e:
-        raise Exception(f"Twilio Error: {e}")
-#-----------------------------------------
-#background
-#---------------------------------
-def set_bg():
-    with open("indus.jpeg", "rb") as img:
-        encoded = base64.b64encode(img.read()).decode()
-
-    st.markdown(f"""
-    <style>
-    .stApp {{
-        background-image: url("data:image/jpeg;base64,{encoded}");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
-# ---------------- CSS---------------
-st.markdown("""
-<style>
 
 
-/* 🚫 REMOVE ALL TOP SPACE COMPLETELY */
-html, body, [class*="css"] {
-    margin: 0 !important;
-    padding: 0 !important;
-}
+# =========================================================
+# FILES
+# =========================================================
 
-/* Main container */
-.block-container {
-    padding-top: 0rem !important;
-    margin-top: 0rem !important;
-}
-
-/* Remove header space (VERY IMPORTANT) */
-header[data-testid="stHeader"] {
-    background: transparent !important;
-}
-/* Fix spacing above first element */
-div[data-testid="stVerticalBlock"] > div:first-child {
-    margin-top: 0rem !important;
-    padding-top: 0rem !important;
-}
-
-/* 🏷️ FIX LABEL VISIBILITY (STRONG FIX) */
-label {
-    color: Black !important;
-    font-weight: 700 !important;
-    font-size: 16px !important;
-    margin-bottom: 6px !important;
-}
-
-/* Fix for specific inputs */
-.stTextInput label,
-.stNumberInput label,
-.stSelectbox label,
-.stMultiSelect label,
-.stTextArea label {
-    color: white !important;;
-}
-
-/* Improve placeholder visibility */
-input::placeholder,
-textarea::placeholder {
-    color: #888 !important;
-}
-
-/* Input box styling */
-input, textarea {
-    background-color: Black!important;
-    color: black !important;
-    border-radius: 10px !important;
-}
-
-/* Titles spacing fix */
-h1, h2, h3 {
-    margin-top: 0px !important;
-    padding-top: 0px !important;
-}
-
-
-/* Input text color */
-input, textarea {
-    color: black !important;
-    background-color: white!important;
-}
-
-
- /* ===== Sidebar Text Fix ===== */
-
-/* Sidebar headings (Navigation, etc.) */
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3,
-section[data-testid="stSidebar"] h4,
-section[data-testid="stSidebar"] h5,
-section[data-testid="stSidebar"] h6,
-section[data-testid="stSidebar"] label,
-section[data-testid="stSidebar"] div {
-    color: white !important;
-}
-
-/* Radio button labels */
-section[data-testid="stSidebar"] .stRadio label {
-    color: Black !important;
-}
-
-/* Selected radio option */
-section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-    color: white!important;
-}
-
-/* Sidebar markdown text */
-section[data-testid="stSidebar"] p {
-    color:white!important;
-} 
-
-/* ===== Titles ===== */
-h1, h2, h3, h4, h5, h6 {
-    color: Black !important;
-}
-
-.main-title {
-    color: Black!important;
-    text-align: center;
-    font-size: 38px;
-    font-weight: 700;
-    margin-bottom: 20px;
-}
-
-.sub-title {
-    color: white!important;
-    font-size: 18px;
-    text-align: center;
-}
-
-/* ===== Inputs ===== */
-input, textarea {
-    border-radius: 10px !important;
-    padding: 8px !important;
-}
-
-/* ===== Buttons ===== */
-.stButton>button {
-    background: linear-gradient(90deg, #00c6ff, #0072ff);
-    color: white;
-    border-radius: 12px;
-    padding: 10px 22px;
-    border: none;
-    font-weight: bold;
-    transition: 0.3s;
-}
-
-.stButton>button:hover {
-    transform: scale(1.05);
-}
-
-/* ===== Sidebar ===== */
-section[data-testid="stSidebar"] {
-    background: rgba(0, 0, 128, 0.4);
-    color: white;
-}
-
-/* ===== Alerts ===== */
-.success-box {
-    background: rgba(0, 255, 150, 0.15);
-    padding: 15px;
-    border-left: 5px solid #00ff95;
-    border-radius: 10px;
-}
-
-.error-box {
-    background: rgba(255, 0, 0, 0.15);
-    padding: 15px;
-    border-left: 5px solid red;
-    border-radius: 10px;
-}
-
-/* ===== Tables ===== */
-[data-testid="stDataFrame"] {
-    background-color: rgba(255,255,255,0.05);
-    border-radius: 10px;
-}
-
-/* ===== Scrollbar ===== */
-::-webkit-scrollbar {
-    width: 8px;
-}
-::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 10px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------- FILES ----------------
 USER_FILE = "users.json"
 ADMIN_FILE = "admins.json"
 REPORTS_FILE = "health_reports.xlsx"
+BACKGROUND_IMAGE = "indus.jpeg"
 
-# ---------------- SESSION ----------------
-for key in ["user_logged_in", "admin_logged_in", "current_user"]:
-    if key not in st.session_state:
-        st.session_state[key] = False if "logged" in key else ""
 
-# --- INDUSTRIAL ZONES DATASET ---
+# =========================================================
+# SESSION STATE
+# =========================================================
+
+if "user_logged_in" not in st.session_state:
+    st.session_state.user_logged_in = False
+
+if "admin_logged_in" not in st.session_state:
+    st.session_state.admin_logged_in = False
+
+if "current_user" not in st.session_state:
+    st.session_state.current_user = ""
+
+if "user_phone" not in st.session_state:
+    st.session_state.user_phone = ""
+
+if "show_social" not in st.session_state:
+    st.session_state.show_social = False
+
+
+# =========================================================
+# BACKGROUND
+# =========================================================
+
+def set_bg():
+    if os.path.exists(BACKGROUND_IMAGE):
+        with open(BACKGROUND_IMAGE, "rb") as img:
+            encoded = base64.b64encode(img.read()).decode()
+
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image: url("data:image/jpeg;base64,{encoded}");
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+
+            .block-container {{
+                padding-top: 2rem;
+            }}
+
+            .main-title {{
+                font-size: 40px;
+                font-weight: bold;
+                color: black;
+                text-align: center;
+                margin-bottom: 20px;
+            }}
+
+            .card {{
+                background-color: rgba(255,255,255,0.88);
+                padding: 25px;
+                border-radius: 15px;
+                margin-bottom: 20px;
+            }}
+
+            .success-box {{
+                background-color: rgba(220,255,220,0.95);
+                color: black;
+                padding: 12px;
+                border-radius: 10px;
+                font-weight: bold;
+                margin: 10px 0;
+            }}
+
+            .error-box {{
+                background-color: rgba(255,220,220,0.95);
+                color: black;
+                padding: 12px;
+                border-radius: 10px;
+                font-weight: bold;
+                margin: 10px 0;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.warning(
+            f"Background image '{BACKGROUND_IMAGE}' was not found. "
+            "The application will continue without the background."
+        )
+
+
+set_bg()
+
+
+# =========================================================
+# INDUSTRIAL ZONES
+# =========================================================
+
 data = {
     "name": [
         "Peenya Industrial Area, Bangalore",
@@ -288,159 +156,107 @@ data = {
         "Taloja Industrial Area, Navi Mumbai",
         "SIDCUL, Haridwar",
         "Adityapur Industrial Area, Jamshedpur",
-        # Andhra Pradesh high‑risk gas/chemical factories
         "Visakhapatnam Fertilizer & Petrochemical Belt (Coromandel, Andhra Petrochemicals, HPCL Refinery)",
         "Kakinada Fertilizer Complex (Nagarjuna Fertilizers & Chemicals, LNG Terminal)",
         "Srikakulam Bulk Drug & Chemical Cluster"
     ],
+
     "lat": [
-        13.0339, 12.8390, 28.5246, 18.5204, 23.0225, 19.0830, 29.9457, 22.8028,
-        17.6868, 16.9891, 18.2960
+        13.0339,
+        12.8390,
+        28.5246,
+        18.5204,
+        23.0225,
+        19.0830,
+        29.9457,
+        22.8028,
+        17.6868,
+        16.9891,
+        18.2960
     ],
+
     "lon": [
-        77.5132, 77.6770, 77.2770, 73.8567, 72.5714, 73.1000, 78.1642, 86.1855,
-        83.2185, 82.2475, 83.8960
+        77.5132,
+        77.6770,
+        77.2770,
+        73.8567,
+        72.5714,
+        73.1000,
+        78.1642,
+        86.1855,
+        83.2185,
+        82.2475,
+        83.8960
     ],
+
     "hazard_radius": [
-        3.0, 4.0, 2.5, 5.0, 6.0, 4.5, 3.5, 4.0,
-        8.0, 7.0, 6.0
+        3.0,
+        4.0,
+        2.5,
+        5.0,
+        6.0,
+        4.5,
+        3.5,
+        4.0,
+        8.0,
+        7.0,
+        6.0
     ]
 }
-df = pd.DataFrame(data)
 
-# ---------------- CONFIG ----------------
-st.set_page_config(
-    page_title="Hazard & Health System",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-set_bg()
-REPORTS_FILE = "health_reports.xlsx"
-
-# ---------------- SESSION ----------------
-if "user_logged_in" not in st.session_state:
-    st.session_state.user_logged_in = False
-
-if "admin_logged_in" not in st.session_state:
-    st.session_state.admin_logged_in = False
-
-if "user_phone" not in st.session_state:
-    st.session_state.user_phone = ""
-
-# ---------------- SAVE/LOAD ----------------
-def save_report(report):
-    df = pd.DataFrame([report])
-    if os.path.exists(REPORTS_FILE):
-        old = pd.read_excel(REPORTS_FILE)
-        df = pd.concat([old, df], ignore_index=True)
-    df.to_excel(REPORTS_FILE, index=False)
-
-def load_reports():
-    if os.path.exists(REPORTS_FILE):
-        try:
-            return pd.read_excel(REPORTS_FILE)
-        except:
-            return pd.DataFrame()
-    return pd.DataFrame()
-# ---------------- LOAD/SAVE USERS ----------------
-def load_users(file):
-    if os.path.exists(file):
-        return json.load(open(file))
-    return {}
-
-def save_users(file, data):
-    json.dump(data, open(file, "w"))
+industrial_df = pd.DataFrame(data)
 
 
-#==================================================
-#animation
-#===================================================
-def loading_animation(msg="Processing..."):
-    with st.spinner(msg):
-        time.sleep(1.5)
-
-#===================================================
-# real time alerts
-#===================================================
-def realtime_alert():
-    placeholder = st.empty()
-
-    for i in range(3):
-        df = load_reports()
-
-        if not df.empty and len(df) > 5:
-            placeholder.warning("🚨 High number of complaints detected!")
-
-        time.sleep(5)
-#============================================================
-#page title function
-#============================================================
-def page_title(text):
-    st.markdown(f"""
-    <h1 style='color:white; font-size:42px; text-align:center;'>
-        {text}
-    </h1>
-    """, unsafe_allow_html=True)
-
-# ---------------- SIDEBAR ----------------
-st.sidebar.markdown("## 🏭 Industrial Safety System")
-st.sidebar.markdown("---")
-
-if st.session_state.user_logged_in:
-    st.sidebar.success(f"👤 {st.session_state.current_user}")
-    page = "User Dashboard"
-
-elif st.session_state.admin_logged_in:
-    st.sidebar.success("🔐 Admin Logged In")
-    page = "Admin Dashboard"
-
-else:
-    page = st.sidebar.radio(
-        "📌 Navigation",
-        ["Hazard Analysis", "Health Reporting", "User Login", "Admin Login"]
-    )
-
-    # 👇 Dynamic login/signup in sidebar
-    if page == "User Login":
-        st.sidebar.markdown("### 👤 User Access")
-        user_option = st.sidebar.radio("", ["Login", "Signup"], key="user_option")
-
-    if page == "Admin Login":
-        st.sidebar.markdown("### 🔐 Admin Access")
-        admin_option = st.sidebar.radio("", ["Login", "Signup"], key="admin_option")
 # =========================================================
-# 🌍 HAZARD ANALYSIS
+# INDUSTRY TYPE
 # =========================================================
-# Map each industrial zone to its type
-st.title("INDUSTRIAL HAZARD ANALYSIS")
 
 zone_to_industry = {
+
     "Peenya Industrial Area, Bangalore": "chemical",
+
     "Electronic City, Bangalore": "chemical",
+
     "Okhla Industrial Area, Delhi": "chemical",
+
     "MIDC, Pune": "chemical",
+
     "GIDC, Ahmedabad": "chemical",
+
     "Taloja Industrial Area, Navi Mumbai": "chemical",
+
     "SIDCUL, Haridwar": "chemical",
+
     "Adityapur Industrial Area, Jamshedpur": "chemical",
+
     "Visakhapatnam Fertilizer & Petrochemical Belt (Coromandel, Andhra Petrochemicals, HPCL Refinery)": "fertilizer",
+
     "Kakinada Fertilizer Complex (Nagarjuna Fertilizers & Chemicals, LNG Terminal)": "fertilizer",
-    "Srikakulam Bulk Drug & Chemical Cluster": "bulk_drug",
+
+    "Srikakulam Bulk Drug & Chemical Cluster": "bulk_drug"
 }
-# --- Factory type to relevant symptoms ---
+
+
+# =========================================================
+# FACTORY SYMPTOMS
+# =========================================================
+
 factory_types = {
+
     "chemical": [
         "Severe Breathing Difficulty (Asthma, COPD)",
         "Chest Pain & Cardiovascular Stress",
         "Chemical Burns / Severe Skin Rash",
         "Neurological Effects (Seizures, Confusion)"
     ],
+
     "fertilizer": [
         "Chronic Bronchitis",
         "Liver/Kidney Damage (long-term exposure)",
         "Chemical Burns / Severe Skin Rash",
         "Air Quality Deterioration"
     ],
+
     "bulk_drug": [
         "Neurological Effects (Seizures, Confusion)",
         "Eye Damage / Vision Loss",
@@ -448,399 +264,1351 @@ factory_types = {
         "Cancer Risk (due to carcinogenic chemicals)"
     ]
 }
-# --- ML MODEL (Dummy Training for Demo) ---
-X_train = np.array([[1,0.8],[3,0.5],[7,0.2],[15,0.1]])  # distance, soil toxicity
-y_train = ["Critical","High","Moderate","Safe"]
-rf_model = RandomForestClassifier()
-rf_model.fit(X_train, y_train)
 
-# --- Telugu Voice Output (gTTS) ---
-def speak_telugu(text):
+
+# =========================================================
+# USER / ADMIN FILE FUNCTIONS
+# =========================================================
+
+def load_users(file):
+
+    if os.path.exists(file):
+
+        try:
+            with open(file, "r") as f:
+                return json.load(f)
+
+        except Exception:
+            return {}
+
+    return {}
+
+
+def save_users(file, data):
+
+    with open(file, "w") as f:
+        json.dump(data, f, indent=4)
+
+
+# =========================================================
+# REPORT FUNCTIONS
+# =========================================================
+
+def save_report(report):
+
+    new_df = pd.DataFrame([report])
+
+    if os.path.exists(REPORTS_FILE):
+
+        try:
+            old_df = pd.read_excel(REPORTS_FILE)
+            new_df = pd.concat(
+                [old_df, new_df],
+                ignore_index=True
+            )
+
+        except Exception:
+            pass
+
+    new_df.to_excel(
+        REPORTS_FILE,
+        index=False
+    )
+
+
+def load_reports():
+
+    if os.path.exists(REPORTS_FILE):
+
+        try:
+            return pd.read_excel(REPORTS_FILE)
+
+        except Exception:
+            return pd.DataFrame()
+
+    return pd.DataFrame()
+
+
+# =========================================================
+# LOADING ANIMATION
+# =========================================================
+
+def loading_animation(message="Processing..."):
+
+    with st.spinner(message):
+        time.sleep(1)
+
+
+# =========================================================
+# TWILIO SMS
+# =========================================================
+def send_sms_notification(report):
+
+    if not sid:
+        raise Exception("TWILIO_ACCOUNT_SID missing from .env")
+
+    if not token:
+        raise Exception("TWILIO_AUTH_TOKEN missing from .env")
+
+    if not messaging_sid:
+        raise Exception("TWILIO_MESSAGING_SERVICE_SID missing from .env")
+
+    client = Client(
+        sid,
+        token
+    )
+
+    phone = report["phone"]
+
+    if not phone.startswith("+"):
+        phone = "+91" + phone
+
     try:
-        tts = gTTS(text=text, lang="te")
-        audio_bytes = io.BytesIO()
-        tts.write_to_fp(audio_bytes)
-        audio_bytes.seek(0)
-        st.audio(audio_bytes, format="audio/mp3")
-    except Exception as e:
-        st.error(f"Speech synthesis failed: {e}")
-# Global style: all text black on white background
-def genai_summary(risk_level, dist_km, soil_toxicity, health_reports):
-    if risk_level == "Critical":
-        advisory = f"ఈ ప్రాంతం {dist_km:.1f} కి.మీ దూరంలో ఉంది. బోరువెల్ త్రవ్వకం ప్రమాదకరం."
-    elif risk_level == "High":
-        advisory = f"{dist_km:.1f} కి.మీ దూరంలో గాలి మరియు నేల నాణ్యత ప్రభావితం అవుతోంది."
-    elif risk_level == "Moderate":
-        advisory = f"మధ్యస్థ ప్రమాదం ఉంది. నేల విషపదార్థం స్కోరు {soil_toxicity:.2f}."
-    else:
-        advisory = "ఈ ప్రాంతం సురక్షితం. తక్షణ పరిశ్రమ ప్రమాదం లేదు."
-    if health_reports:
-        advisory += f" సమీపంలో {len(health_reports)} ఆరోగ్య సమస్యలు నివేదించబడ్డాయి."
-    return advisory
+        admin_msg = client.messages.create(
+            body=(
+                "NEW HEALTH REPORT\n"
+                "----------------------\n"
+                f"Name: {report['name']}\n"
+                f"Age: {report['age']}\n"
+                f"Phone: {report['phone']}\n"
+                f"Industry: {report['industry']}\n"
+                f"Symptoms: {report['symptoms']}\n"
+                f"Address: {report['address']}\n"
+                f"Time: {report['time']}\n"
+                "----------------------"
+            ),
+            messaging_service_sid=messaging_sid,
+            to="+919513838736"
+        )
 
-# --- BEEP ALERT ---
+        client.messages.create(
+            body=f"Hello {report['name']}, your health report was received ✅",
+            messaging_service_sid=messaging_sid,
+            to=phone
+        )
+
+        return admin_msg.sid
+
+    except Exception as e:
+        raise Exception(f"Twilio Error: {e}")
+
+# =========================================================
+# ML MODEL
+# =========================================================
+
+X_train = np.array([
+    [1, 0.8],
+    [3, 0.5],
+    [7, 0.2],
+    [15, 0.1]
+])
+
+y_train = [
+    "Critical",
+    "High",
+    "Moderate",
+    "Safe"
+]
+
+rf_model = RandomForestClassifier(
+    n_estimators=100,
+    random_state=42
+)
+
+rf_model.fit(
+    X_train,
+    y_train
+)
+
+
+# =========================================================
+# TELUGU VOICE
+# =========================================================
+
+def speak_telugu(text):
+
+    try:
+
+        tts = gTTS(
+            text=text,
+            lang="te"
+        )
+
+        audio_bytes = io.BytesIO()
+
+        tts.write_to_fp(
+            audio_bytes
+        )
+
+        audio_bytes.seek(0)
+
+        st.audio(
+            audio_bytes,
+            format="audio/mp3"
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Speech synthesis failed: {e}"
+        )
+
+
+# =========================================================
+# BEEP ALERT
+# =========================================================
+
 def trigger_beep_alert():
+
     beep_js = """
     <script>
-    var context = new (window.AudioContext || window.webkitAudioContext)();
+    var context = new (
+        window.AudioContext ||
+        window.webkitAudioContext
+    )();
+
     var oscillator = context.createOscillator();
+
     oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, context.currentTime);
-    oscillator.connect(context.destination);
+
+    oscillator.frequency.setValueAtTime(
+        880,
+        context.currentTime
+    );
+
+    oscillator.connect(
+        context.destination
+    );
+
     oscillator.start();
-    oscillator.stop(context.currentTime + 0.6);
+
+    oscillator.stop(
+        context.currentTime + 0.6
+    );
     </script>
     """
-    components.html(beep_js, height=0, width=0)
-def nearest_factory(u_lat: float, u_lon: float) -> Tuple[pd.Series, float]:
-    min_dist = float("inf")
+
+    components.html(
+        beep_js,
+        height=0,
+        width=0
+    )
+
+
+# =========================================================
+# NEAREST FACTORY
+# =========================================================
+
+def nearest_factory(
+    user_lat: float,
+    user_lon: float
+):
+
+    min_distance = float("inf")
+
     nearest = None
-    for _, row in df.iterrows():
-        dist = geodesic((u_lat, u_lon), (row["lat"], row["lon"])).km
-        if dist < min_dist:
-            min_dist = dist
+
+    for _, row in industrial_df.iterrows():
+
+        distance = geodesic(
+            (user_lat, user_lon),
+            (row["lat"], row["lon"])
+        ).km
+
+        if distance < min_distance:
+
+            min_distance = distance
             nearest = row
-    return nearest, min_dist
-# --- HAZARD ASSESSMENT ---
-def get_risk_assessment(dist_km, factory_type):
-    if factory_type == "fertilizer" or factory_type == "petrochemical" or factory_type == "gas":
-        if dist_km < 2.5:
-            return "Critical", [
-                "Explosion hazard",
-                "Toxic gas release (Ammonia, Chlorine)",
-                "Respiratory diseases (Asthma, COPD)",
-                "Skin/eye irritation"
-            ], "🔴"
-        elif dist_km < 6.0:
-            return "High", [
-                "Air quality deterioration",
-                "Risk of chemical burns",
-                "Chronic bronchitis",
-                "Cardiovascular stress"
-            ], "🟠"
-        elif dist_km < 12.0:
-            return "Moderate", [
-                "Dust and minor emissions",
-                "Mild respiratory irritation",
-                "Headaches, nausea"
-            ], "🟡"
-        else:
-            return "Safe", ["No immediate industrial hazard"], "🟢"
 
-    elif factory_type == "pharma" or factory_type == "bulk_drug":
-        if dist_km < 2.5:
-            return "Critical", [
-                "Explosion hazard (solvent vapors)",
-                "Toxic chemical exposure",
-                "Neurological effects",
-                "Skin allergies"
-            ], "🔴"
-        elif dist_km < 6.0:
-            return "High", [
-                "Air quality deterioration",
-                "Chemical storage risks",
-                "Respiratory irritation",
-                "Liver/kidney stress (long term)"
-            ], "🟠"
-        elif dist_km < 12.0:
-            return "Moderate", [
-                "Dust exposure",
-                "Minor solvent emissions",
-                "Eye irritation"
-            ], "🟡"
+    return nearest, min_distance
+
+
+# =========================================================
+# RISK ASSESSMENT
+# =========================================================
+
+def get_risk_assessment(
+    distance_km,
+    factory_type
+):
+
+    if factory_type in [
+        "fertilizer",
+        "petrochemical",
+        "gas"
+    ]:
+
+        if distance_km < 2.5:
+
+            return (
+                "Critical",
+                [
+                    "Explosion hazard",
+                    "Toxic gas release",
+                    "Respiratory health risks",
+                    "Skin and eye irritation"
+                ],
+                "🔴"
+            )
+
+        elif distance_km < 6:
+
+            return (
+                "High",
+                [
+                    "Air quality deterioration",
+                    "Risk of chemical exposure",
+                    "Chronic respiratory problems",
+                    "Cardiovascular stress"
+                ],
+                "🟠"
+            )
+
+        elif distance_km < 12:
+
+            return (
+                "Moderate",
+                [
+                    "Dust and minor emissions",
+                    "Mild respiratory irritation",
+                    "Headaches or nausea"
+                ],
+                "🟡"
+            )
+
         else:
-            return "Safe", ["No immediate industrial hazard"], "🟢"
+
+            return (
+                "Safe",
+                [
+                    "No immediate industrial hazard detected"
+                ],
+                "🟢"
+            )
+
+    elif factory_type in [
+        "pharma",
+        "bulk_drug"
+    ]:
+
+        if distance_km < 2.5:
+
+            return (
+                "Critical",
+                [
+                    "Explosion hazard",
+                    "Toxic chemical exposure",
+                    "Neurological effects",
+                    "Skin allergies"
+                ],
+                "🔴"
+            )
+
+        elif distance_km < 6:
+
+            return (
+                "High",
+                [
+                    "Air quality deterioration",
+                    "Chemical storage risks",
+                    "Respiratory irritation",
+                    "Long-term exposure concerns"
+                ],
+                "🟠"
+            )
+
+        elif distance_km < 12:
+
+            return (
+                "Moderate",
+                [
+                    "Dust exposure",
+                    "Minor chemical emissions",
+                    "Eye irritation"
+                ],
+                "🟡"
+            )
+
+        else:
+
+            return (
+                "Safe",
+                [
+                    "No immediate industrial hazard detected"
+                ],
+                "🟢"
+            )
 
     else:
-        # Default fallback
-        if dist_km < 2.5:
-            return "Critical", ["Explosion hazard","Toxic release"], "🔴"
-        elif dist_km < 6.0:
-            return "High", ["Air quality deterioration"], "🟠"
-        elif dist_km < 12.0:
-            return "Moderate", ["Minor emissions"], "🟡"
+
+        if distance_km < 2.5:
+
+            return (
+                "Critical",
+                [
+                    "Explosion hazard",
+                    "Toxic release"
+                ],
+                "🔴"
+            )
+
+        elif distance_km < 6:
+
+            return (
+                "High",
+                [
+                    "Air quality deterioration"
+                ],
+                "🟠"
+            )
+
+        elif distance_km < 12:
+
+            return (
+                "Moderate",
+                [
+                    "Minor emissions"
+                ],
+                "🟡"
+            )
+
         else:
-            return "Safe", ["No immediate industrial hazard"], "🟢"
 
-# --- Excel Storage ---
-def save_report_to_excel(new_report):
-    df_report = pd.DataFrame([new_report])
-    if os.path.exists(REPORTS_FILE):
-        existing = pd.read_excel(REPORTS_FILE)
-        updated = pd.concat([existing, df_report], ignore_index=True)
-        updated.to_excel(REPORTS_FILE, index=False)
+            return (
+                "Safe",
+                [
+                    "No immediate industrial hazard"
+                ],
+                "🟢"
+            )
+
+
+# =========================================================
+# GENAI-STYLE ADVISORY
+# =========================================================
+
+def genai_summary(
+    risk_level,
+    distance_km,
+    soil_toxicity,
+    health_reports
+):
+
+    if risk_level == "Critical":
+
+        advisory = (
+            f"ఈ ప్రాంతం {distance_km:.1f} కి.మీ "
+            "దూరంలో ఉంది. బోరువెల్ త్రవ్వకం "
+            "ప్రమాదకరం."
+        )
+
+    elif risk_level == "High":
+
+        advisory = (
+            f"{distance_km:.1f} కి.మీ దూరంలో "
+            "గాలి మరియు నేల నాణ్యత ప్రభావితం "
+            "అయ్యే అవకాశం ఉంది."
+        )
+
+    elif risk_level == "Moderate":
+
+        advisory = (
+            f"మధ్యస్థ ప్రమాదం ఉంది. "
+            f"నేల విషపదార్థం స్కోరు "
+            f"{soil_toxicity:.2f}."
+        )
+
     else:
-        df_report.to_excel(REPORTS_FILE, index=False)
 
-# --- Twilio SMS Notification ---
+        advisory = (
+            "ఈ ప్రాంతంలో తక్షణ పరిశ్రమ "
+            "ప్రమాదం గుర్తించబడలేదు."
+        )
+
+    if health_reports:
+
+        advisory += (
+            f" సమీపంలో {len(health_reports)} "
+            "ఆరోగ్య సమస్యలు నివేదించబడ్డాయి."
+        )
+
+    return advisory
+
+
+# =========================================================
+# REAL TIME ALERT
+# =========================================================
+
+def realtime_alert():
+
+    reports_df = load_reports()
+
+    if not reports_df.empty and len(reports_df) > 5:
+
+        st.warning(
+            "🚨 High number of complaints detected!"
+        )
+
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+st.sidebar.markdown(
+    "## 🏭 Industrial Safety System"
+)
+
+st.sidebar.markdown("---")
+
+
+if st.session_state.user_logged_in:
+
+    st.sidebar.success(
+        f"👤 {st.session_state.current_user}"
+    )
+
+    page = "User Dashboard"
+
+elif st.session_state.admin_logged_in:
+
+    st.sidebar.success(
+        "🔐 Admin Logged In"
+    )
+
+    page = "Admin Dashboard"
+
+else:
+
+    page = st.sidebar.radio(
+        "📌 Navigation",
+        [
+            "Hazard Analysis",
+            "Health Reporting",
+            "User Login",
+            "Admin Login"
+        ]
+    )
+
+
+# =========================================================
+# USER LOGIN OPTIONS
+# =========================================================
+
+if page == "User Login":
+
+    user_option = st.sidebar.radio(
+        "👤 User Access",
+        [
+            "Login",
+            "Signup"
+        ],
+        key="user_option"
+    )
+
+
+# =========================================================
+# ADMIN LOGIN OPTIONS
+# =========================================================
+
+if page == "Admin Login":
+
+    admin_option = st.sidebar.radio(
+        "🔐 Admin Access",
+        [
+            "Login",
+            "Signup"
+        ],
+        key="admin_option"
+    )
+
+
+# =========================================================
+# HAZARD ANALYSIS
+# =========================================================
+
 if page == "Hazard Analysis":
-    col1, col2 = st.columns([2,1])
+
+    st.markdown(
+        '<div class="main-title">'
+        '🌍 INDUSTRIAL HAZARD ANALYSIS'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    col1, col2 = st.columns(
+        [2, 1]
+    )
+
     with col1:
-        search_query = st.text_input("🔎 Search Industrial Zone by Name")
-        map_center = [22.9734, 78.6569]
+
+        search_query = st.text_input(
+            "🔎 Search Industrial Zone by Name"
+        )
+
+        map_center = [
+            22.9734,
+            78.6569
+        ]
+
         zoom_level = 5
+
         if search_query:
-            matches = df[df["name"].str.contains(search_query, case=False, na=False)]
+
+            matches = industrial_df[
+                industrial_df["name"].str.contains(
+                    search_query,
+                    case=False,
+                    na=False
+                )
+            ]
+
             if not matches.empty:
+
                 selected = matches.iloc[0]
-                map_center = [selected["lat"], selected["lon"]]
+
+                map_center = [
+                    selected["lat"],
+                    selected["lon"]
+                ]
+
                 zoom_level = 12
-                st.success(f"Found: {selected['name']}")
+
+                st.success(
+                    f"Found: {selected['name']}"
+                )
+
             else:
-                st.warning("No matching industrial zone found.")
 
-        m = folium.Map(location=map_center, zoom_start=zoom_level)
-        for _, row in df.iterrows():
-            folium.Marker([row["lat"], row["lon"]],
+                st.warning(
+                    "No matching industrial zone found."
+                )
+
+        # ---------------- MAP ----------------
+
+        m = folium.Map(
+            location=map_center,
+            zoom_start=zoom_level
+        )
+
+        for _, row in industrial_df.iterrows():
+
+            folium.Marker(
+                [
+                    row["lat"],
+                    row["lon"]
+                ],
                 popup=row["name"],
-                icon=folium.Icon(color='black', icon='industry', prefix='fa')).add_to(m)
-            folium.Circle([row["lat"], row["lon"]],
-                radius=row["hazard_radius"]*1000,
-                color="red", fill=True, opacity=0.2).add_to(m)
+                tooltip=row["name"],
+                icon=folium.Icon(
+                    color="black",
+                    icon="industry",
+                    prefix="fa"
+                )
+            ).add_to(m)
 
-        HeatMap(df[["lat","lon"]].values.tolist(), radius=25).add_to(m)
-        map_data = st_folium(m, width=800, height=500)
-        
-            
+            folium.Circle(
+                [
+                    row["lat"],
+                    row["lon"]
+                ],
+                radius=row["hazard_radius"] * 1000,
+                color="red",
+                fill=True,
+                fill_opacity=0.15
+            ).add_to(m)
 
-       # --- PAGE 1: Location Analysis ---
+        HeatMap(
+            industrial_df[
+                ["lat", "lon"]
+            ].values.tolist(),
+            radius=25
+        ).add_to(m)
+
+        map_data = st_folium(
+            m,
+            width=800,
+            height=550
+        )
+
+    # =====================================================
+    # LOCATION ANALYSIS
+    # =====================================================
+
     with col2:
-        st.subheader("📍 Location Analysis")
 
-        if map_data and map_data["last_clicked"]:
-            u_lat = map_data["last_clicked"]["lat"]
-            u_lon = map_data["last_clicked"]["lng"]
+        st.subheader(
+            "📍 Location Analysis"
+        )
 
-            nearest, dist_km = nearest_factory(u_lat, u_lon)
-            factory_type = zone_to_industry.get(nearest['name'])
+        if (
+            map_data
+            and map_data.get("last_clicked")
+        ):
 
-            if factory_type is None:
-                st.error("⚠️ Factory type mapping missing!")
+            user_lat = map_data[
+                "last_clicked"
+            ]["lat"]
+
+            user_lon = map_data[
+                "last_clicked"
+            ]["lng"]
+
+            nearest, distance_km = nearest_factory(
+                user_lat,
+                user_lon
+            )
+
+            if nearest is None:
+
+                st.error(
+                    "Unable to find nearest industrial zone."
+                )
+
                 st.stop()
 
-            risk_level, hazards, emoji = get_risk_assessment(dist_km, factory_type)
-            features = [[dist_km, 0.5]]
-            ml_pred = rf_model.predict(features)[0]
+            factory_type = zone_to_industry.get(
+                nearest["name"]
+            )
 
-            st.markdown(f"**Nearest Industrial Zone:** {nearest['name']}")
-            st.markdown(f"**Distance:** {dist_km:.2f} km")
-            st.markdown(f"**Risk Level:** {emoji} {risk_level} (ML says: {ml_pred})")
+            if factory_type is None:
 
-            st.write("### Potential Hazards:")
-            for h in hazards:
-                st.markdown(f"- {h}")
+                st.error(
+                    "Factory type mapping missing!"
+                )
 
-            summary = genai_summary(risk_level, dist_km, 0.5, [])
+                st.stop()
+
+            risk_level, hazards, emoji = (
+                get_risk_assessment(
+                    distance_km,
+                    factory_type
+                )
+            )
+
+            # ML prediction
+
+            features = [
+                [
+                    distance_km,
+                    0.5
+                ]
+            ]
+
+            ml_prediction = rf_model.predict(
+                features
+            )[0]
+
             st.markdown(
-    f'<div style="background-color:rgba(255,255,255,0.6); color:black; padding:15px; border-radius:10px; font-weight:bold; border-left:5px solid purple;">🤖 GenAI Advisory: {summary}</div>',
-    unsafe_allow_html=True
-)
+                f"**Nearest Industrial Zone:** "
+                f"{nearest['name']}"
+            )
 
-            # 🔴 Alert
-            if risk_level in ["Critical", "High"]:
+            st.markdown(
+                f"**Distance:** "
+                f"{distance_km:.2f} km"
+            )
+
+            st.markdown(
+                f"**Risk Level:** "
+                f"{emoji} {risk_level}"
+            )
+
+            st.markdown(
+                f"**ML Prediction:** "
+                f"{ml_prediction}"
+            )
+
+            st.write(
+                "### ⚠️ Potential Hazards"
+            )
+
+            for hazard in hazards:
+
+                st.markdown(
+                    f"- {hazard}"
+                )
+
+            summary = genai_summary(
+                risk_level,
+                distance_km,
+                0.5,
+                []
+            )
+
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:rgba(255,255,255,0.85);
+                    color:black;
+                    padding:15px;
+                    border-radius:10px;
+                    font-weight:bold;
+                    border-left:5px solid purple;
+                ">
+                🤖 GenAI Advisory:<br>
+                {summary}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            # ---------------- ALERT ----------------
+
+            if risk_level in [
+                "Critical",
+                "High"
+            ]:
+
                 trigger_beep_alert()
-                st.markdown(
-    '<div style="background-color:rgba(255,255,255,0.6); color:black; padding:15px; border-radius:10px; font-weight:bold; border-left:5px solid red;">⚠️ Borewell drilling is dangerous at this distance! Please avoid.</div>',
-    unsafe_allow_html=True
-)
-    
-            else:
-                st.markdown(
-    '<div style="background-color:rgba(255,255,255,0.6); color:black; padding:15px; border-radius:10px; font-weight:bold; border-left:5px solid green;">✅ Borewell drilling is considered safe here.</div>',
-    unsafe_allow_html=True
-)
-    
 
-            # 🔊 Voice
-            if st.button("🔊 Voice Advisory"):
+                st.markdown(
+                    """
+                    <div style="
+                        background-color:rgba(255,255,255,0.9);
+                        color:black;
+                        padding:15px;
+                        border-radius:10px;
+                        font-weight:bold;
+                        border-left:5px solid red;
+                    ">
+                    ⚠️ Borewell drilling may be
+                    dangerous at this distance.
+                    Please avoid drilling without
+                    appropriate environmental assessment.
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            else:
+
+                st.markdown(
+                    """
+                    <div style="
+                        background-color:rgba(255,255,255,0.9);
+                        color:black;
+                        padding:15px;
+                        border-radius:10px;
+                        font-weight:bold;
+                        border-left:5px solid green;
+                    ">
+                    ✅ No immediate industrial hazard
+                    was detected based on this
+                    demo assessment.
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+            # ---------------- VOICE ----------------
+
+            if st.button(
+                "🔊 Voice Advisory",
+                key="voice_advisory"
+            ):
+
                 speak_telugu(summary)
 
         else:
+
             st.markdown(
-    '<div style="background-color:rgba(255,255,255,0.6); color:black; padding:12px; border-radius:10px; font-weight:bold; border-left:5px solid blue;">ℹ️ Click on the map to analyze your location.</div>',
-    unsafe_allow_html=True
-)
+                """
+                <div style="
+                    background-color:rgba(255,255,255,0.9);
+                    color:black;
+                    padding:12px;
+                    border-radius:10px;
+                    font-weight:bold;
+                    border-left:5px solid blue;
+                ">
+                ℹ️ Click on the map to analyze
+                your location.
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
 
 # =========================================================
-# 🩺 HEALTH REPORTING
-# ========================================================
+# HEALTH REPORTING
+# =========================================================
+
 elif page == "Health Reporting":
-    
-    st.title("🩺 Health Reporting")
 
-    with st.form("report"):
-        name = st.text_input("Name")
-        age = st.number_input("Age", min_value=1, max_value=120)
-        phone = st.text_input("Phone Number")
-        industry = st.selectbox("🏭 Select Industrial Zone", list(zone_to_industry.keys()))
-        industry_type = zone_to_industry.get(industry)
-        symptom_options = factory_types.get(industry_type, [])
-        symptoms = st.multiselect("🩺 Select Symptoms", symptom_options)
-        address = st.text_area("📍 Address")
-        submit = st.form_submit_button("Submit")
+    st.markdown(
+        '<div class="main-title">'
+        '🩺 HEALTH REPORTING'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
-    # ✅ MUST BE INSIDE THIS BLOCK
-    if submit:
+    with st.form("public_health_report"):
 
-        if not name:
-            st.warning("❌ Name required")
+        name = st.text_input(
+            "Name"
+        )
 
-        elif not phone:
-            st.warning("❌ Phone number required")
+        age = st.number_input(
+            "Age",
+            min_value=1,
+            max_value=120,
+            value=18
+        )
 
-        elif not phone.isdigit() or len(phone) != 10:
-            st.warning("❌ Enter valid 10-digit phone number")
-
-        elif not symptoms:
-            st.warning("❌ Select at least one symptom")
-
-        elif not address:
-            st.warning("❌ Address required")
-
-        else:
-            report = {
-    "user": st.session_state.current_user if st.session_state.user_logged_in else "public",
-    "name": st.session_state.current_user if st.session_state.user_logged_in else name,
-    "age": age,
-    "phone": phone,
-    "industry": industry,
-    "symptoms": ", ".join(symptoms),
-    "address": address,
-    "time": datetime.now()
-}
-
-            save_report(report)
-
-            try:
-                send_sms_notification(report)
-                st.markdown(
-    '<div style="background-color:rgba(255,255,255,0.6); color:black; padding:12px; border-radius:10px; font-weight:bold; border-left:5px solid green;">✅ Report submitted successfully</div>',
-    unsafe_allow_html=True
-)
-            except Exception as e:
-                st.error(f"SMS failed: {e}")
-# =========================================================
-# 👤 USER LOGIN / SIGNUP
-# ====================================================
-elif page == "User Login":
-
-    st.markdown('<div class="main-title">👤 User Portal</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    users = load_users(USER_FILE)
-    option = st.session_state.get("user_option", "Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if option == "Signup":
-        if st.button("Create Account"):
-            if username in users:
-                st.markdown('<div class="error-box">User already exists</div>', unsafe_allow_html=True)
-            else:
-                users[username] = password
-                save_users(USER_FILE, users)
-                st.markdown('<div class="success-box">Account created successfully 🎉</div>', unsafe_allow_html=True)
-
-    else:
-        if st.button("Login"):
-            if username in users and users[username] == password:
-                st.session_state.user_logged_in = True
-                st.session_state.current_user = username
-                st.markdown('<div class="success-box">Login Successful 🚀</div>', unsafe_allow_html=True)
-                
-            else:
-                st.markdown('<div class="error-box">Invalid credentials!!!</div>',unsafe_allow_html=True)
-                
-                
-
-# =========================================================
-# 🔐 ADMIN LOGIN / SIGNUP
-# =========================================================
-elif page == "Admin Login":
-
-    st.markdown('<div class="main-title">🔐 Admin Portal</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-
-    admins = load_users(ADMIN_FILE)
-    option = st.session_state.get("admin_option", "Login")
-
-    username = st.text_input("Admin Username")
-    password = st.text_input("Password", type="password")
-
-    if option == "Signup":
-        if st.button("Register Admin"):
-            if username in admins:
-                st.markdown('<div class="error-box">Admin already exists</div>', unsafe_allow_html=True)
-            else:
-                admins[username] = password
-                save_users(ADMIN_FILE, admins)
-                st.markdown('<div class="success-box">Admin registered successfully ✅</div>', unsafe_allow_html=True)
-
-    else:
-        if st.button("Login"):
-            if username in admins and admins[username] == password:
-                st.session_state.admin_logged_in = True
-                st.markdown('<div class="success-box">Admin Login Successful 🚀</div>', unsafe_allow_html=True)
-                
-            else:
-                st.markdown('<div class="error-box">Invalid credentials</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-   
-
-# =========================================================
-# 📄 USER DASHBOARD
-# =========================================================
-# =========================================================
-# 📄 USER DASHBOARD
-# =========================================================
-elif page == "User Dashboard":
-
-    st.markdown('<div class="main-title">📄 User Dashboard</div>', unsafe_allow_html=True)
-    st.write(f"Welcome {st.session_state.current_user}")
-
-    # ➕ Submit New Report
-    st.subheader("➕ Submit New Report")
-
-    with st.form("report_form"):
-        st.write(f"👤 Logged in as: {st.session_state.current_user}")
-
-        name = st.text_input("Name", value=st.session_state.current_user)
-        age = st.number_input("Age", min_value=1, max_value=120)
-        phone = st.text_input("Phone Number")
+        phone = st.text_input(
+            "Phone Number"
+        )
 
         industry = st.selectbox(
             "🏭 Select Industrial Zone",
             list(zone_to_industry.keys())
         )
 
-        industry_type = zone_to_industry.get(industry)
-        symptom_options = factory_types.get(industry_type, [])
+        industry_type = zone_to_industry.get(
+            industry
+        )
 
-        symptoms = st.multiselect("🩺 Select Symptoms", symptom_options)
-        address = st.text_area("📍 Address")
+        symptom_options = factory_types.get(
+            industry_type,
+            []
+        )
 
-        submit = st.form_submit_button("Submit")
+        symptoms = st.multiselect(
+            "🩺 Select Symptoms",
+            symptom_options
+        )
 
-    # =====================================================
-    # SUBMIT LOGIC
-    # =====================================================
+        address = st.text_area(
+            "📍 Address"
+        )
+
+        submit = st.form_submit_button(
+            "Submit Report"
+        )
+
     if submit:
 
-        loading_animation("Submitting report...")
+        if not name.strip():
 
-        if not phone:
-            st.warning("❌ Phone number required")
+            st.warning(
+                "❌ Name required"
+            )
 
-        elif not phone.isdigit() or len(phone) != 10:
-            st.warning("❌ Enter valid 10-digit phone number")
+        elif not phone.strip():
+
+            st.warning(
+                "❌ Phone number required"
+            )
+
+        elif (
+            not phone.isdigit()
+            or len(phone) != 10
+        ):
+
+            st.warning(
+                "❌ Enter valid 10-digit phone number"
+            )
 
         elif not symptoms:
-            st.warning("❌ Select at least one symptom")
 
-        elif not address:
-            st.warning("❌ Address required")
+            st.warning(
+                "❌ Select at least one symptom"
+            )
+
+        elif not address.strip():
+
+            st.warning(
+                "❌ Address required"
+            )
 
         else:
+
+            loading_animation(
+                "Submitting report..."
+            )
+
+            report = {
+                "user": (
+                    st.session_state.current_user
+                    if st.session_state.user_logged_in
+                    else "public"
+                ),
+
+                "name": (
+                    st.session_state.current_user
+                    if st.session_state.user_logged_in
+                    else name
+                ),
+
+                "age": age,
+
+                "phone": phone,
+
+                "industry": industry,
+
+                "symptoms": ", ".join(
+                    symptoms
+                ),
+
+                "address": address,
+
+                "time": datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+            }
+
+            save_report(report)
+
+            try:
+
+                send_sms_notification(
+                    report
+                )
+
+                st.success(
+                    "✅ Report submitted successfully "
+                    "and SMS notifications sent."
+                )
+
+            except Exception as e:
+
+                st.warning(
+                    "✅ Report saved successfully, "
+                    "but SMS could not be sent."
+                )
+
+                st.error(
+                    str(e)
+                )
+
+
+# =========================================================
+# USER LOGIN
+# =========================================================
+
+elif page == "User Login":
+
+    st.markdown(
+        '<div class="main-title">'
+        '👤 USER PORTAL'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="card">',
+        unsafe_allow_html=True
+    )
+
+    users = load_users(
+        USER_FILE
+    )
+
+    option = st.session_state.get(
+        "user_option",
+        "Login"
+    )
+
+    username = st.text_input(
+        "Username",
+        key="user_username"
+    )
+
+    password = st.text_input(
+        "Password",
+        type="password",
+        key="user_password"
+    )
+
+    if option == "Signup":
+
+        if st.button(
+            "Create Account",
+            key="create_user"
+        ):
+
+            if not username.strip():
+
+                st.error(
+                    "Username required."
+                )
+
+            elif not password:
+
+                st.error(
+                    "Password required."
+                )
+
+            elif username in users:
+
+                st.error(
+                    "User already exists."
+                )
+
+            else:
+
+                users[username] = password
+
+                save_users(
+                    USER_FILE,
+                    users
+                )
+
+                st.success(
+                    "Account created successfully 🎉"
+                )
+
+    else:
+
+        if st.button(
+            "Login",
+            key="user_login"
+        ):
+
+            if (
+                username in users
+                and users[username] == password
+            ):
+
+                st.session_state.user_logged_in = True
+
+                st.session_state.current_user = (
+                    username
+                )
+
+                st.success(
+                    "Login Successful 🚀"
+                )
+
+                st.rerun()
+
+            else:
+
+                st.error(
+                    "Invalid username or password."
+                )
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# ADMIN LOGIN
+# =========================================================
+
+elif page == "Admin Login":
+
+    st.markdown(
+        '<div class="main-title">'
+        '🔐 ADMIN PORTAL'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="card">',
+        unsafe_allow_html=True
+    )
+
+    admins = load_users(
+        ADMIN_FILE
+    )
+
+    option = st.session_state.get(
+        "admin_option",
+        "Login"
+    )
+
+    username = st.text_input(
+        "Admin Username",
+        key="admin_username"
+    )
+
+    password = st.text_input(
+        "Password",
+        type="password",
+        key="admin_password"
+    )
+
+    if option == "Signup":
+
+        if st.button(
+            "Register Admin",
+            key="register_admin"
+        ):
+
+            if not username.strip():
+
+                st.error(
+                    "Admin username required."
+                )
+
+            elif not password:
+
+                st.error(
+                    "Password required."
+                )
+
+            elif username in admins:
+
+                st.error(
+                    "Admin already exists."
+                )
+
+            else:
+
+                admins[username] = password
+
+                save_users(
+                    ADMIN_FILE,
+                    admins
+                )
+
+                st.success(
+                    "Admin registered successfully ✅"
+                )
+
+    else:
+
+        if st.button(
+            "Login",
+            key="admin_login"
+        ):
+
+            if (
+                username in admins
+                and admins[username] == password
+            ):
+
+                st.session_state.admin_logged_in = True
+
+                st.success(
+                    "Admin Login Successful 🚀"
+                )
+
+                st.rerun()
+
+            else:
+
+                st.error(
+                    "Invalid admin credentials."
+                )
+
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+
+# =========================================================
+# USER DASHBOARD
+# =========================================================
+
+elif page == "User Dashboard":
+
+    st.markdown(
+        '<div class="main-title">'
+        '📄 USER DASHBOARD'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.write(
+        f"Welcome, "
+        f"**{st.session_state.current_user}** 👋"
+    )
+
+    st.subheader(
+        "➕ Submit New Health Report"
+    )
+
+    with st.form("user_report_form"):
+
+        st.write(
+            f"👤 Logged in as: "
+            f"**{st.session_state.current_user}**"
+        )
+
+        name = st.text_input(
+            "Name",
+            value=st.session_state.current_user
+        )
+
+        age = st.number_input(
+            "Age",
+            min_value=1,
+            max_value=120,
+            value=18
+        )
+
+        phone = st.text_input(
+            "Phone Number"
+        )
+
+        industry = st.selectbox(
+            "🏭 Select Industrial Zone",
+            list(zone_to_industry.keys())
+        )
+
+        industry_type = zone_to_industry.get(
+            industry
+        )
+
+        symptom_options = factory_types.get(
+            industry_type,
+            []
+        )
+
+        symptoms = st.multiselect(
+            "🩺 Select Symptoms",
+            symptom_options
+        )
+
+        address = st.text_area(
+            "📍 Address"
+        )
+
+        submit = st.form_submit_button(
+            "Submit Report"
+        )
+
+    if submit:
+
+        loading_animation(
+            "Submitting report..."
+        )
+
+        if not phone:
+
+            st.warning(
+                "❌ Phone number required"
+            )
+
+        elif (
+            not phone.isdigit()
+            or len(phone) != 10
+        ):
+
+            st.warning(
+                "❌ Enter valid 10-digit phone number"
+            )
+
+        elif not symptoms:
+
+            st.warning(
+                "❌ Select at least one symptom"
+            )
+
+        elif not address:
+
+            st.warning(
+                "❌ Address required"
+            )
+
+        else:
+
             report = {
                 "user": st.session_state.current_user,
                 "name": name,
@@ -849,108 +1617,299 @@ elif page == "User Dashboard":
                 "industry": industry,
                 "symptoms": ", ".join(symptoms),
                 "address": address,
-                "time": datetime.now()
+                "time": datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
             }
 
-            # Save report
             save_report(report)
 
-            st.success("✅ Report submitted successfully")
+            st.success(
+                "✅ Report submitted successfully"
+            )
 
     # =====================================================
-    # SHOW REPORTS (AUTO REFRESH AFTER SUBMIT)
+    # USER REPORTS
     # =====================================================
-    df = load_reports()
 
-    if not df.empty:
+    reports_df = load_reports()
 
-        user_df = df[
-            (df["user"] == st.session_state.current_user) |
-            (df["name"] == st.session_state.current_user)
-        ]
+    if not reports_df.empty:
 
-        # latest report first
-        if "time" in user_df.columns:
-            user_df = user_df.sort_values(by="time", ascending=False)
+        if "user" in reports_df.columns:
 
-        st.subheader("📋 Your Reports")
-        st.dataframe(user_df, use_container_width=True)
+            user_df = reports_df[
+                reports_df["user"]
+                == st.session_state.current_user
+            ]
+
+        else:
+
+            user_df = pd.DataFrame()
+
+        if not user_df.empty:
+
+            if "time" in user_df.columns:
+
+                user_df = user_df.sort_values(
+                    by="time",
+                    ascending=False
+                )
+
+            st.subheader(
+                "📋 Your Reports"
+            )
+
+            st.dataframe(
+                user_df,
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "You have not submitted any reports yet."
+            )
 
     else:
-        st.info("No reports submitted yet.")
+
+        st.info(
+            "No reports submitted yet."
+        )
 
     # =====================================================
     # SOCIAL MEDIA
     # =====================================================
+
     st.markdown("---")
-    st.subheader("🌐 Connect with Social Media")
 
-    if "show_social" not in st.session_state:
-        st.session_state.show_social = False
+    st.subheader(
+        "🌐 Connect with Social Media"
+    )
 
-    if st.button("🔗 Open Social Media"):
-        st.session_state.show_social = not st.session_state.show_social
+    if st.button(
+        "🔗 Open Social Media",
+        key="social_button"
+    ):
+
+        st.session_state.show_social = (
+            not st.session_state.show_social
+        )
 
     if st.session_state.show_social:
-        st.markdown("""
-        <div style="display:flex; gap:20px; justify-content:center; margin-top:15px;">
-            <a href="https://www.instagram.com/accounts/login/" target="_blank">
-                <button style="padding:10px 20px; border-radius:10px;">📸 Instagram</button>
+
+        st.markdown(
+            """
+            <div style="
+                display:flex;
+                gap:20px;
+                justify-content:center;
+                margin-top:15px;
+            ">
+
+            <a href="https://www.instagram.com/"
+               target="_blank">
+                <button style="
+                    padding:10px 20px;
+                    border-radius:10px;
+                ">
+                📸 Instagram
+                </button>
             </a>
 
-            <a href="https://www.facebook.com/login/" target="_blank">
-                <button style="padding:10px 20px; border-radius:10px;">📘 Facebook</button>
+            <a href="https://www.facebook.com/"
+               target="_blank">
+                <button style="
+                    padding:10px 20px;
+                    border-radius:10px;
+                ">
+                📘 Facebook
+                </button>
             </a>
 
-            <a href="https://twitter.com/login" target="_blank">
-                <button style="padding:10px 20px; border-radius:10px;">🐦 Twitter</button>
+            <a href="https://twitter.com/"
+               target="_blank">
+                <button style="
+                    padding:10px 20px;
+                    border-radius:10px;
+                ">
+                🐦 Twitter
+                </button>
             </a>
-        </div>
-        """, unsafe_allow_html=True)
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     # =====================================================
-    # LOGOUT
+    # USER LOGOUT
     # =====================================================
-    if st.button("🚪 Logout", key="user_logout1"):
+
+    if st.button(
+        "🚪 Logout",
+        key="user_logout"
+    ):
+
         st.session_state.user_logged_in = False
         st.session_state.current_user = ""
-        st.rerun()
-# =========================================================
-# 📊 ADMIN DASHBOARD
-# =========================================================
-elif page == "Admin Dashboard":
-    
 
-    st.markdown('<div class="main-title">📊 Admin Dashboard</div>', unsafe_allow_html=True)
+        st.rerun()
+
+
+# =========================================================
+# ADMIN DASHBOARD
+# =========================================================
+
+elif page == "Admin Dashboard":
+
+    st.markdown(
+        '<div class="main-title">'
+        '📊 ADMIN DASHBOARD'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
     reports_df = load_reports()
 
+    # =====================================================
+    # SUMMARY METRICS
+    # =====================================================
+
     if reports_df.empty:
-        st.warning("No data available")
-    else:
-        st.dataframe(reports_df)
 
-        st.subheader("📈 Complaints by Industry")
-
-        fig = px.bar(
-            reports_df,
-            x="industry",
-            title="📊 Complaints by Industry",
-            color="industry",
-            text_auto=True
+        st.warning(
+            "No health reports available."
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+    else:
 
-    realtime_alert()
+        total_reports = len(
+            reports_df
+        )
+
+        unique_users = (
+            reports_df["user"].nunique()
+            if "user" in reports_df.columns
+            else 0
+        )
+
+        unique_industries = (
+            reports_df["industry"].nunique()
+            if "industry" in reports_df.columns
+            else 0
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric(
+            "📋 Total Reports",
+            total_reports
+        )
+
+        col2.metric(
+            "👥 Users",
+            unique_users
+        )
+
+        col3.metric(
+            "🏭 Industries",
+            unique_industries
+        )
+
+        # =================================================
+        # REPORT TABLE
+        # =================================================
+
+        st.subheader(
+            "📋 All Health Reports"
+        )
+
+        st.dataframe(
+            reports_df,
+            use_container_width=True
+        )
+
+        # =================================================
+        # INDUSTRY CHART
+        # =================================================
+
+        if "industry" in reports_df.columns:
+
+            st.subheader(
+                "📈 Complaints by Industry"
+            )
+
+            fig = px.bar(
+                reports_df,
+                x="industry",
+                title="📊 Complaints by Industry",
+                color="industry",
+                text_auto=True
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True
+            )
+
+        # =================================================
+        # SYMPTOM CHART
+        # =================================================
+
+        if "symptoms" in reports_df.columns:
+
+            symptom_counts = (
+                reports_df["symptoms"]
+                .fillna("")
+                .str.split(", ")
+                .explode()
+                .value_counts()
+                .reset_index()
+            )
+
+            symptom_counts.columns = [
+                "Symptom",
+                "Count"
+            ]
+
+            st.subheader(
+                "🩺 Reported Symptoms"
+            )
+
+            if not symptom_counts.empty:
+
+                fig2 = px.bar(
+                    symptom_counts,
+                    x="Symptom",
+                    y="Count",
+                    title="🩺 Most Reported Symptoms",
+                    text_auto=True
+                )
+
+                st.plotly_chart(
+                    fig2,
+                    use_container_width=True
+                )
+
+        # =================================================
+        # REAL-TIME ALERT
+        # =================================================
+
+        realtime_alert()
+
     # =====================================================
-# ADMIN LOGOUT FIX
-# =====================================================
-    if st.button("🚪 Logout", key="admin_logout"):
+    # ADMIN LOGOUT
+    # =====================================================
 
-       st.session_state.admin_logged_in = False
-       st.session_state.current_user = ""
+    st.markdown("---")
 
-       st.rerun()
+    if st.button(
+        "🚪 Logout",
+        key="admin_logout"
+    ):
 
+        st.session_state.admin_logged_in = False
+        st.session_state.current_user = ""
 
+        st.rerun()

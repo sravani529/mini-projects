@@ -10,11 +10,13 @@ auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 
 client = Client(account_sid, auth_token)
 
-message = client.messages.create(
-    body="Hello! This is a test SMS from Twilio.",
-    from_="+12526595639",   # your Twilio trial number
-    to="+919513838736"      # your verified mobile number
-)
+def send_sms(message_body):
+    message = client.messages.create(
+        body=message_body,
+        messaging_service_sid="MG4fea662af68407f0a138ac1ec40c27ed",  # ✅ Your Messaging Service SID
+        to="+919513838736"  # ✅ Your verified mobile number
+    )
 
-print("Message SID:", message.sid)
-
+    print("Message SID:", message.sid)
+    print("Message Status:", message.status)  # helpful for debugging
+    return message.sid

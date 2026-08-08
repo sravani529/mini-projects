@@ -1,6 +1,8 @@
-serviceAccountKey.json
-.env
 venv/
 __pycache__/
-
-
+*.pyc
+.env
+serviceAccountKey.json
+users.json
+admins.json
+health_reports.xlsx

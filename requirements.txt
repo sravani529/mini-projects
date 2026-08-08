@@ -1,6 +1,14 @@
+streamlit==1.54.0
 twilio==9.10.2
 python-dotenv==1.2.2
-streamlit==1.54.0
-firebase_admin==7.2.0
+firebase-admin==7.2.0
 pandas==2.3.3
 openpyxl==3.1.5
+folium
+streamlit-folium
+geopy
+scikit-learn
+numpy
+gTTS
+plotly
+matplotlib
